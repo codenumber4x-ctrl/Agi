@@ -3,7 +3,9 @@
 Two anatomically modelled rats living in a realistic pet/lab-style home cage,
 simulated with the [MuJoCo](https://mujoco.org) physics engine.
 
-![overview](screenshots/02_overview.png)
+![overview](screenshots/video_frames/video_t030.0_wide.png)
+
+![contact sheet](screenshots/contact_sheet.png)
 
 ## What's inside
 

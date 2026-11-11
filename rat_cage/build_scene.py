@@ -53,7 +53,9 @@ def _save_png(name, img):
     import imageio.v2 as imageio
     os.makedirs(TEX_DIR, exist_ok=True)
     path = os.path.join(TEX_DIR, name)
-    imageio.imwrite(path, np.clip(img, 0, 255).astype(np.uint8))
+    tmp = path + f".{os.getpid()}.tmp.png"
+    imageio.imwrite(tmp, np.clip(img, 0, 255).astype(np.uint8))
+    os.replace(tmp, path)          # atomic: safe with parallel render workers
     return path
 
 
@@ -434,9 +436,13 @@ def add_rat(spec, name, pos, yaw):
     return torso
 
 
-def build(seed=0, rat_poses=None):
+def build(seed=0, rat_poses=None, regen_textures=True):
     rng = np.random.default_rng(seed)
-    tex = make_textures(seed)
+    names = ("bedding", "wood", "floor", "wall", "glaze", "pellet")
+    if regen_textures:
+        tex = make_textures(seed)
+    else:
+        tex = {n: os.path.join(TEX_DIR, n + ".png") for n in names}
     spec = mujoco.MjSpec()
     spec.modelname = "rat_home_cage"
     spec.option.timestep = 0.002
@@ -496,11 +502,11 @@ def strengthen_rat_actuators(model, stiffness=3.0, tau=0.015, force=1.5):
             model.actuator_forcerange[a] *= force
 
 
-def compile_scene(seed=0, rat_poses=None):
+def compile_scene(seed=0, rat_poses=None, regen_textures=True):
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        spec = build(seed, rat_poses)
+        spec = build(seed, rat_poses, regen_textures)
         model = spec.compile()
     strengthen_rat_actuators(model)
     # Rat skins: coat colours.

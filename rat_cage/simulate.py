@@ -159,7 +159,7 @@ _R = {}
 def _render_init(seed, width, height, qpos, cams):
     import warnings
     warnings.simplefilter("ignore")
-    _, m = scene.compile_scene(seed, World.POSES)
+    _, m = scene.compile_scene(seed, World.POSES, regen_textures=False)
     _R.update(m=m, d=mujoco.MjData(m), r=mujoco.Renderer(m, height, width),
               qpos=qpos, cams=cams)
     opt = mujoco.MjvOption()

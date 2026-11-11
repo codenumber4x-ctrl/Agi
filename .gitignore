@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+MUJOCO_LOG.TXT
+assets/textures/*.tmp.png

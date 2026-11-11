@@ -4,3 +4,4 @@ MUJOCO_LOG.TXT
 assets/textures/*.tmp.png
 rat_cage/rl/runs/*/ckpt_*
 rat_cage/rl/runs/*.log
+rat_cage/rl/runs/*/progress.csv

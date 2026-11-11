@@ -40,12 +40,24 @@ BAR_SPACING = 0.0125   # 1/2 inch, standard for adult rats
 BAR_R = 0.00125        # 2.5 mm wire
 HX, HY = CAGE_L / 2, CAGE_W / 2
 
-# Locations of the two resource "sections" (used by the behaviour controller).
-WATER_SPOUT = np.array([HX - 0.035, 0.12, 0.085])     # sipper ball tip
-WATER_DRINK_POS = np.array([HX - 0.13, 0.12])          # where the rat stands
-FOOD_BOWL = np.array([-HX + 0.10, -HY + 0.10])          # bowl centre
-FOOD_EAT_POS = np.array([-HX + 0.20, -HY + 0.17])      # where the rat stands
-HIDE_HOUSE = np.array([-HX + 0.11, HY - 0.10])
+
+
+def set_cage_size(length=0.80, width=0.50):
+    """Resize the cage floor (height stays 60 cm).  Updates every derived
+    location (water spout, food bowl, hide house) - call before build()."""
+    global CAGE_L, CAGE_W, HX, HY, WATER_SPOUT, WATER_DRINK_POS, FOOD_BOWL, FOOD_EAT_POS
+    global HIDE_HOUSE
+    CAGE_L, CAGE_W = length, width
+    HX, HY = CAGE_L / 2, CAGE_W / 2
+    # Locations of the two resource "sections" (used by controllers / RL rewards).
+    WATER_SPOUT = np.array([HX - 0.035, 0.12, 0.085])     # sipper ball tip
+    WATER_DRINK_POS = np.array([HX - 0.13, 0.12])          # where the rat stands
+    FOOD_BOWL = np.array([-HX + 0.10, -HY + 0.10])          # bowl centre
+    FOOD_EAT_POS = np.array([-HX + 0.20, -HY + 0.17])      # where the rat stands
+    HIDE_HOUSE = np.array([-HX + 0.11, HY - 0.10])
+
+
+set_cage_size(CAGE_L, CAGE_W)
 
 
 # ------------------------------------------------------------------ textures
@@ -224,7 +236,7 @@ def add_room(spec):
                  diffuse=[0.25, 0.27, 0.30], specular=[0.0, 0.0, 0.0])
 
 
-def add_cage(spec, rng):
+def add_cage(spec, rng, visual=True, furniture=True, pellets=True):
     wb = spec.worldbody
     cage = wb.add_body(name="cage", pos=[0, 0, 0])
     t = 0.005  # pan wall thickness
@@ -239,12 +251,12 @@ def add_cage(spec, rng):
         ("pan_yn", [HX + t, t, PAN_H / 2], [0, -HY - t, PAN_H / 2]),
     ]:
         _box(cage, name, size, pos, mat="pan")
-    for name, size, pos in [
+    for name, size, pos in ([] if not visual else [
         ("rim_xp", [0.008, HY + 0.012, 0.006], [HX + t, 0, PAN_H]),
         ("rim_xn", [0.008, HY + 0.012, 0.006], [-HX - t, 0, PAN_H]),
         ("rim_yp", [HX + 0.012, 0.008, 0.006], [0, HY + t, PAN_H]),
         ("rim_yn", [HX + 0.012, 0.008, 0.006], [0, -HY - t, PAN_H]),
-    ]:
+    ]):
         _box(cage, name, size, pos, mat="pan_rim", collide=False)
 
     # --- invisible collision walls for the wire section (cheap, robust)
@@ -259,6 +271,16 @@ def add_cage(spec, rng):
     ]:
         _box(cage, name, size, pos, rgba=[0, 0, 0, 0], group=3)
 
+    if visual:
+        _add_wire_visuals(cage, rng)
+    add_water_section(cage, visual)
+    add_food_section(spec, cage, rng, pellets)
+    if furniture:
+        add_furniture(cage)
+    return cage
+
+
+def _add_wire_visuals(cage, rng):
     # --- visual wire bars (vertical) on all four sides
     z0, z1 = PAN_H, CAGE_H
     k = 0
@@ -290,7 +312,7 @@ def add_cage(spec, rng):
          mat="steel", collide=False)
 
     # --- loose paper bedding pieces (visual) for texture/depth
-    for i in range(450):
+    for i in range(int(min(1500, 450 * CAGE_L * CAGE_W / 0.4))):
         x = rng.uniform(-HX + 0.01, HX - 0.01)
         y = rng.uniform(-HY + 0.01, HY - 0.01)
         s = rng.uniform(0.002, 0.0045)
@@ -300,13 +322,8 @@ def add_cage(spec, rng):
                  rgba=[0.90 * shade, 0.84 * shade, 0.72 * shade, 1], collide=False,
                  euler=[rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), rng.uniform(0, np.pi)])
 
-    add_water_section(cage)
-    add_food_section(spec, cage, rng)
-    add_furniture(cage)
-    return cage
 
-
-def add_water_section(cage):
+def add_water_section(cage, visual=True):
     """500 ml gravity water bottle hung outside the right wall, sipper inside."""
     bx, by = HX + 0.045, WATER_SPOUT[1]
     bz = 0.30
@@ -332,7 +349,7 @@ def add_water_section(cage):
     cage.add_site(name="water_spout", pos=tip, size=[0.004, 0, 0], rgba=[0, 0, 1, 0])
 
 
-def add_food_section(spec, cage, rng):
+def add_food_section(spec, cage, rng, pellets=True):
     """Heavy ceramic bowl filled with simulated rodent-chow pellets."""
     cx, cy = FOOD_BOWL
     R, H, t = 0.058, 0.032, 0.007
@@ -348,6 +365,8 @@ def add_food_section(spec, cage, rng):
                   rgba=[0, 0, 0, 0], contype=0, conaffinity=0)
     cage.add_site(name="food_bowl", pos=[cx, cy, 0.03], size=[0.004, 0, 0], rgba=[0, 0, 0, 0])
 
+    if not pellets:
+        return
     # pellets: ~1.5 cm long extruded chow blocks, each a free rigid body
     k = 0
     for layer in range(3):
@@ -436,7 +455,8 @@ def add_rat(spec, name, pos, yaw):
     return torso
 
 
-def build(seed=0, rat_poses=None, regen_textures=True):
+def build(seed=0, rat_poses=None, regen_textures=True, visual=True, furniture=True,
+          pellets=True):
     rng = np.random.default_rng(seed)
     names = ("bedding", "wood", "floor", "wall", "glaze", "pellet")
     if regen_textures:
@@ -462,7 +482,7 @@ def build(seed=0, rat_poses=None, regen_textures=True):
 
     add_materials(spec, tex)
     add_room(spec)
-    add_cage(spec, rng)
+    add_cage(spec, rng, visual=visual, furniture=furniture, pellets=pellets)
 
     if rat_poses is None:
         rat_poses = {"rat1": ([0.10, -0.08, 0.0], 2.6), "rat2": ([-0.05, 0.08, 0.0], -0.4)}
@@ -502,13 +522,15 @@ def strengthen_rat_actuators(model, stiffness=3.0, tau=0.015, force=1.5):
             model.actuator_forcerange[a] *= force
 
 
-def compile_scene(seed=0, rat_poses=None, regen_textures=True):
+def compile_scene(seed=0, rat_poses=None, regen_textures=True, visual=True, furniture=True,
+                  pellets=True, strengthen=True):
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        spec = build(seed, rat_poses, regen_textures)
+        spec = build(seed, rat_poses, regen_textures, visual, furniture, pellets)
         model = spec.compile()
-    strengthen_rat_actuators(model)
+    if strengthen:
+        strengthen_rat_actuators(model)
     # Rat skins: coat colours.
     for name, rgba in RAT_COATS.items():
         sid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SKIN, f"{name}/skin")

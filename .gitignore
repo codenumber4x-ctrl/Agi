@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 MUJOCO_LOG.TXT
 assets/textures/*.tmp.png
+rat_cage/rl/runs/*/ckpt_*
+rat_cage/rl/runs/*.log

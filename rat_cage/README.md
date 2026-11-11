@@ -108,3 +108,49 @@ Rat model © DeepMind Technologies, from
 [google-deepmind/dm_control](https://github.com/google-deepmind/dm_control),
 licensed under the Apache License 2.0. Everything else (cage, controllers,
 textures) was written for this project.
+
+## Reinforcement learning: one rat, 3× cage (`rl/`)
+
+A single rat in a cage scaled 3× in length and width (2.4 m × 1.5 m floor,
+hide house, shelf and ramp removed, food bowl and water spout kept). The policy
+drives all 38 stock actuators directly at 50 Hz. There is **no scripted gait,
+no CPG and no assist force**; the behaviour is learned entirely from reward.
+
+| Reward term | Value |
+|---|---|
+| moving (forward body speed, clipped to −0.1…0.3 m/s) | `2.0 × v` per step |
+| reaching the food (head over the bowl) | **+200** (once per episode) |
+| reaching the water (mouth at the sipper tip) | **+100** (once per episode) |
+| hard wall impact (contact force above 3.5 N) | up to −1.5 per step |
+| control effort | small penalty |
+
+Episodes last 30 s and end early if the rat tips over. Observations are joint
+state, actuator state, body orientation and velocity, touch sensors, 9
+whisker-like range rays, egocentric vectors to the food and water, and
+ate/drank flags. Training uses PPO from Stable-Baselines3 with 4 parallel
+environments and took about 7.3 h on 4 CPU cores for 8M steps.
+
+![learning curves](screenshots/rl_learning_curves.png)
+
+Evaluation over 8 random spawns (same seeds for each checkpoint, 30 s):
+
+| Checkpoint | Food | Water | Falls | Hard hits / episode |
+|---|---|---|---|---|
+| 6.5M (`rl/policies/best_6500k.zip`) | 8/8 | 3/8 | 1/8 | 12 |
+| 7.0M | 8/8 | 0/8 | 1/8 | 21 |
+| 7.5M | 7/8 | 0/8 | 1/8 | 16 |
+| 8.0M (`rl/policies/final_8000k.zip`) | 7/8 | 0/8 | 5/8 | 15 |
+
+After 6.5M steps the policy got worse: it stopped going for the water and
+fell more often. The 6.5M checkpoint is therefore kept as the best policy.
+The gait it learns is a fast, lunging scramble rather than a rat-like
+walk, and it still bumps into walls.
+
+```bash
+pip install stable-baselines3 gymnasium torch
+python rl/train.py --timesteps 8000000 --envs 4 --out rl/runs/ppo_rat
+MUJOCO_GL=egl python rl/evaluate.py rl/policies/best_6500k.zip --episodes 8 --out media/rl_rat.mp4
+```
+
+Videos: `media/rl_rat_500k.mp4`, `rl_rat_1500k.mp4`, `rl_rat_3000k.mp4`,
+`rl_rat_6500k.mp4`, `rl_rat_final.mp4`.
